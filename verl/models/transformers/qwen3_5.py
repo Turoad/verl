@@ -447,11 +447,16 @@ def fast_pos_embed_interpolate(self, grid_thw):
         ]
 
         for i in range(4):
-            idx_list[i].extend(indices[i].tolist())
-            weight_list[i].extend(weights[i].tolist())
+            idx_list[i].append(indices[i])
+            weight_list[i].append(weights[i])
 
-    idx_tensor = torch.tensor(idx_list, dtype=torch.long, device=device)
-    weight_tensor = torch.tensor(weight_list, dtype=self.pos_embed.weight.dtype, device=device)
+    # Modification: concatenate the per-image tensors and copy them to the device once, instead of
+    # round-tripping every index and weight through Python lists. Cast on CPU before the copy so the
+    # dtype conversion matches the previous implementation bit for bit.
+    idx_tensor = torch.stack([torch.cat(parts) for parts in idx_list]).to(dtype=torch.long).to(device)
+    weight_tensor = (
+        torch.stack([torch.cat(parts) for parts in weight_list]).to(dtype=self.pos_embed.weight.dtype).to(device)
+    )
     pos_embeds = self.pos_embed(idx_tensor).to(device) * weight_tensor[:, :, None]
     patch_pos_embeds = pos_embeds[0] + pos_embeds[1] + pos_embeds[2] + pos_embeds[3]
 
