@@ -407,6 +407,21 @@ def qwen3_5_decoder_layer_forward(
 
 
 def fast_pos_embed_interpolate(self, grid_thw):
+    """Bilinearly interpolate the learned position embeddings to each image/video grid.
+
+    Patched over ``fast_pos_embed_interpolate`` of the HF vision model. Differences from upstream: the
+    output stays on ``grid_thw.device`` even when FSDP2 CPU offload keeps ``self.pos_embed`` on CPU, and
+    the interpolation indices and weights are built as tensors and copied to the device once rather than
+    through Python lists. The result is bitwise identical to the list-based version.
+
+    Args:
+        self: The vision model, with ``pos_embed``, ``num_grid_per_side`` and ``config.spatial_merge_size``.
+        grid_thw (torch.Tensor): ``(num_images, 3)`` temporal, height and width patch counts per image/video.
+
+    Returns:
+        torch.Tensor: ``(sum(t * h * w), hidden_size)`` position embeddings, each grid repeated over ``t``
+        and reordered into ``spatial_merge_size`` x ``spatial_merge_size`` blocks to match the patch order.
+    """
     grid_thw_list = grid_thw.tolist()
     grid_ts = [row[0] for row in grid_thw_list]
     grid_hs = [row[1] for row in grid_thw_list]
